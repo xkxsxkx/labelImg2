@@ -1,0 +1,2 @@
+zoom HUD: V, reserved
+FileView colorization: V
