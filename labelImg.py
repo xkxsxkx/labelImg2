@@ -213,6 +213,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.addDockWidget(Qt.RightDockWidgetArea, self.filedock)
         self.dock.setFeatures(QDockWidget.DockWidgetFloatable)
         self.filedock.setFeatures(QDockWidget.DockWidgetFloatable)
+        self.tabifyDockWidget(self.filedock, self.dock)
 
         self.displayTimer = QTimer(self)
         self.displayTimer.setInterval(1000)
