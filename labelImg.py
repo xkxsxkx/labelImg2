@@ -144,12 +144,63 @@ class MainWindow(QMainWindow, WindowMixin):
         myHeader = self.labelList.verticalHeader()
         myHeader.clicked.connect(self.labelHeaderClicked)
 
-
         labellistLayout.addWidget(self.labelList)
 
         self.dock = QDockWidget(u'Box Labels', self)
         self.dock.setObjectName(u'Labels')
         self.dock.setWidget(labelListContainer)
+        ###### new image helper ########
+        levelsValid = QIntValidator(self)
+        levelsValid.setRange(0, 7)
+        angleValid = QIntValidator(self)
+        angleValid.setRange(-360, 360)
+        contrastValid = QIntValidator(self)
+        contrastValid.setRange(0, 255)
+        doubleValid = QDoubleValidator(self)
+        doubleValid.setDecimals(2)
+        flo = QFormLayout()
+        self.numLevelsEdit = QLineEdit()
+        self.numLevelsEdit.setValidator(levelsValid)
+        self.angleStartEdit = QLineEdit()
+        self.angleStartEdit.setValidator(angleValid)
+        self.angleExtentEdit = QLineEdit()
+        self.angleExtentEdit.setValidator(angleValid)
+        self.granularityEdit = QLineEdit()
+        self.granularityEdit.setValidator(doubleValid)
+        self.contrastEdit = QLineEdit()
+        self.contrastEdit.setValidator(contrastValid)
+        self.minContrastEdit = QLineEdit()
+        self.minContrastEdit.setValidator(contrastValid)
+        self.searchNumEdit = QLineEdit()
+        self.searchNumEdit.setValidator(contrastValid)
+        self.minScoreEdit = QLineEdit()
+        self.minScoreEdit.setValidator(doubleValid)
+        self.greedinessEdit = QLineEdit()
+        self.greedinessEdit.setValidator(doubleValid)
+        flo.addRow('numLevel', self.numLevelsEdit)
+        flo.addRow('angleStart', self.angleStartEdit)
+        flo.addRow('angleExtent', self.angleExtentEdit)
+        flo.addRow('granularity', self.granularityEdit)
+        flo.addRow('contrast', self.contrastEdit)
+        flo.addRow('minContrast',self.minContrastEdit)
+        flo.addRow('searchNum', self.searchNumEdit)
+        flo.addRow('minScore', self.minScoreEdit)
+        flo.addRow('Greediness', self.greedinessEdit)
+        makeButton = QPushButton(u'make template', self)
+        matchButton = QPushButton(u'match template', self)
+        makeButton.clicked.connect(self.makeTemplate)
+        matchButton.clicked.connect(self.matchTemplate)
+        operaButtons = QHBoxLayout()
+        operaButtons.addWidget(makeButton)
+        operaButtons.addWidget(matchButton)
+        flo.addRow(operaButtons)
+        helperContainer = QWidget()
+        helperContainer.setLayout(flo)
+        ##############
+        self.helperDock = QDockWidget(u'image helper', self)
+        self.helperDock.setObjectName(u'helper')
+        self.helperDock.setWidget(helperContainer)
+        ####### end image helper #######
 
         self.labelList.toggleEdit.connect(self.toggleExtraEditing)
 
@@ -211,9 +262,12 @@ class MainWindow(QMainWindow, WindowMixin):
         self.setCentralWidget(scroll)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.filedock)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.helperDock)
         self.dock.setFeatures(QDockWidget.DockWidgetFloatable)
         self.filedock.setFeatures(QDockWidget.DockWidgetFloatable)
+        self.helperDock.setFeatures(QDockWidget.DockWidgetFloatable)
         self.tabifyDockWidget(self.filedock, self.dock)
+        self.tabifyDockWidget(self.filedock, self.helperDock)
 
         self.displayTimer = QTimer(self)
         self.displayTimer.setInterval(1000)
@@ -461,6 +515,12 @@ class MainWindow(QMainWindow, WindowMixin):
         if self.filePath and os.path.isdir(self.filePath):
             self.openDirDialog(dirpath=self.filePath)
 
+    def makeTemplate(self):
+        self.statusBar().showMessage('make template')
+        self.statusBar().show()
+    def matchTemplate(self):
+        self.statusBar().showMessage('match template')
+        self.statusBar().show()
     def noShapes(self):
         return not self.ItemShapeDict
 
