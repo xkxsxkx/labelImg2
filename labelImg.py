@@ -9,6 +9,9 @@ import platform
 import re
 import sys
 import subprocess
+import cv2
+import math
+import pyxcv as pv
 
 from functools import partial
 from collections import defaultdict
@@ -517,9 +520,43 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def makeTemplate(self):
         self.statusBar().showMessage('make template')
+        if self._noSelectionSlot:
+            self._noSelectionSlot = False
+        else:
+            shape = self.canvas.selectedShape
+            templateImg = cv2.imread(self.filePath, 0)
+            if templateImg is None:
+                self.statusBar().showMessage('can\'t read image')
+                self.statusBar().show()
+                return
+            pts = [(p.x(), p.y()) for p in shape.points]
+            if not shape.isRotated:
+                bndbox = LabelFile.convertPoints2BndBox(pts)
+                xmin = bndbox[0]
+                ymin = bndbox[1]
+                xmax = bndbox[2]
+                ymax = bndbox[3]
+                templateImg = templateImg[ymin:ymax, xmin:xmax].clone()
+            else:
+                shapeObj = dict(points = pts, center = shape.center, direction = shape.direction)
+                robndbox = LabelFile.convertPoints2RotatedBndBox(shapeObj)
+                cx = robndbox[0]
+                cy = robndbox[1]
+                w = robndbox[2]
+                h = robndbox[3]
+                angle = robndbox[4]/(2*math.pi) * 360
+                rows,cols = templateImg.shape[:2]
+                M = cv2.getRotationMatrix2D((cx, cy), angle, 1)
+                dst = cv2.warpAffine(templateImg, M, (cols,rows))
+                templateImg = dst[int(cy - h/2) : int(cy + h/2), int(cx - w/2) : int(cx + w/2)].copy()
+                self.statusBar().showMessage(str(angle))
+            cv2.imshow("template", templateImg)
+            cv2.waitKey(0)
         self.statusBar().show()
     def matchTemplate(self):
         self.statusBar().showMessage('match template')
+        searchImg = cv2.imread(self.filePath, 0)
+        # self.canvas.
         self.statusBar().show()
     def noShapes(self):
         return not self.ItemShapeDict
