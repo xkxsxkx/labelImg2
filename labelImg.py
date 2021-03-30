@@ -650,15 +650,17 @@ class MainWindow(QMainWindow, WindowMixin):
             self.model, angleStart, angleExtent,
             searchNum, minScore, greediness)
         self.matchViewModel.clear()
+        self.matchViewModel.setColumnCount(4)
+        self.matchViewModel.setHorizontalHeaderLabels(["x", "y", "angle", "score"])
+        for y in range(res.shape[0]):
+            for x in range(res.shape[1]):
+                item = QStandardItem(str(res[y][x]))
+                self.matchViewModel.setItem(y, x, item)
         if self.paintResultBox.isChecked():
             paint = pv.drawResult(searchImg, self.model, res)
             cv2.namedWindow("result", cv2.WINDOW_AUTOSIZE)
             cv2.imshow("result",paint)
             cv2.waitKey(0)
-        for y in range(res.shape[0]):
-            for x in range(res.shape[1]):
-                item = QStandardItem(str(res[y][x]))
-                self.matchViewModel.setItem(y, x, item)
         self.statusBar().show()
     def noShapes(self):
         return not self.ItemShapeDict
