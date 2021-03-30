@@ -11,6 +11,7 @@ import sys
 import subprocess
 import cv2
 import math
+import traceback
 import pyxcv as pv
 
 from functools import partial
@@ -153,6 +154,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dock.setObjectName(u'Labels')
         self.dock.setWidget(labelListContainer)
         ###### new image helper ########
+        self.model = None
         levelsValid = QIntValidator(self)
         levelsValid.setRange(0, 7)
         angleValid = QIntValidator(self)
@@ -164,39 +166,65 @@ class MainWindow(QMainWindow, WindowMixin):
         flo = QFormLayout()
         self.numLevelsEdit = QLineEdit()
         self.numLevelsEdit.setValidator(levelsValid)
+        self.numLevelsEdit.setText(str(3))
         self.angleStartEdit = QLineEdit()
         self.angleStartEdit.setValidator(angleValid)
+        self.angleStartEdit.setText(str(0))
+        self.angleStepEdit = QLineEdit()
+        self.angleStepEdit.setValidator(angleValid)
+        self.angleStepEdit.setText(str(1))
         self.angleExtentEdit = QLineEdit()
         self.angleExtentEdit.setValidator(angleValid)
+        self.angleExtentEdit.setText(str(360))
         self.granularityEdit = QLineEdit()
         self.granularityEdit.setValidator(doubleValid)
+        self.granularityEdit.setText(str(2))
         self.contrastEdit = QLineEdit()
         self.contrastEdit.setValidator(contrastValid)
+        self.contrastEdit.setText(str(80))
         self.minContrastEdit = QLineEdit()
         self.minContrastEdit.setValidator(contrastValid)
+        self.minContrastEdit.setText(str(20))
         self.searchNumEdit = QLineEdit()
         self.searchNumEdit.setValidator(contrastValid)
+        self.searchNumEdit.setText(str(4))
         self.minScoreEdit = QLineEdit()
         self.minScoreEdit.setValidator(doubleValid)
+        self.minScoreEdit.setText(str(0.5))
         self.greedinessEdit = QLineEdit()
         self.greedinessEdit.setValidator(doubleValid)
+        self.greedinessEdit.setText(str(0.7))
         flo.addRow('numLevel', self.numLevelsEdit)
         flo.addRow('angleStart', self.angleStartEdit)
         flo.addRow('angleExtent', self.angleExtentEdit)
+        flo.addRow('angleStepEdit', self.angleStepEdit)
         flo.addRow('granularity', self.granularityEdit)
         flo.addRow('contrast', self.contrastEdit)
         flo.addRow('minContrast',self.minContrastEdit)
         flo.addRow('searchNum', self.searchNumEdit)
         flo.addRow('minScore', self.minScoreEdit)
         flo.addRow('Greediness', self.greedinessEdit)
-        makeButton = QPushButton(u'make template', self)
-        matchButton = QPushButton(u'match template', self)
+        prevButton = QPushButton(u'prev', self)
+        makeButton = QPushButton(u'make', self)
+        matchButton = QPushButton(u'match', self)
+        prevButton.clicked.connect(self.prevTemplate)
         makeButton.clicked.connect(self.makeTemplate)
         matchButton.clicked.connect(self.matchTemplate)
         operaButtons = QHBoxLayout()
+        operaButtons.addWidget(prevButton)
         operaButtons.addWidget(makeButton)
         operaButtons.addWidget(matchButton)
         flo.addRow(operaButtons)
+
+        matchLayer = QHBoxLayout()
+        self.matchViewModel = QStandardItemModel(self)
+        self.matchViewModel.setColumnCount(4)
+        self.matchViewModel.setHorizontalHeaderLabels(["x", "y", "angle", "score"])
+        self.matchInfo = QTableView()
+        self.matchInfo.setModel(self.matchViewModel)
+
+        matchLayer.addWidget(self.matchInfo)
+        flo.addRow(matchLayer)
         helperContainer = QWidget()
         helperContainer.setLayout(flo)
         ##############
@@ -518,6 +546,45 @@ class MainWindow(QMainWindow, WindowMixin):
         if self.filePath and os.path.isdir(self.filePath):
             self.openDirDialog(dirpath=self.filePath)
 
+    def prevTemplate(self):
+        if self._noSelectionSlot:
+            self._noSelectionSlot = False
+        else:
+            shape = self.canvas.selectedShape
+            templateImg = cv2.imread(self.filePath, 0)
+            if templateImg is None:
+                self.statusBar().showMessage('can\'t read image')
+                self.statusBar().show()
+                return
+            pts = [(p.x(), p.y()) for p in shape.points]
+            if not shape.isRotated:
+                bndbox = LabelFile.convertPoints2BndBox(pts)
+                xmin = bndbox[0]
+                ymin = bndbox[1]
+                xmax = bndbox[2]
+                ymax = bndbox[3]
+                templateImg = templateImg[ymin:ymax, xmin:xmax].copy()
+            else:
+                shapeObj = dict(points = pts, center = shape.center, direction = shape.direction)
+                robndbox = LabelFile.convertPoints2RotatedBndBox(shapeObj)
+                cx = robndbox[0]
+                cy = robndbox[1]
+                w = robndbox[2]
+                h = robndbox[3]
+                angle = robndbox[4]/(2*math.pi) * 360
+                rows,cols = templateImg.shape[:2]
+                M = cv2.getRotationMatrix2D((cx, cy), angle, 1)
+                dst = cv2.warpAffine(templateImg, M, (cols,rows))
+                templateImg = dst[int(cy - h/2) : int(cy + h/2), int(cx - w/2) : int(cx + w/2)].copy()
+                self.statusBar().showMessage(str(angle))
+            granularity = int(self.granularityEdit.text())
+            contrast = int(self.contrastEdit.text())
+            minContrast = int(self.minContrastEdit.text())
+            prev = pv.previewTemplate(templateImg, granularity, contrast, minContrast)
+            cv2.imshow("prev", prev)
+            self.statusBar().showMessage('prev success')
+            cv2.waitKey(0)
+        self.statusBar().show()
     def makeTemplate(self):
         self.statusBar().showMessage('make template')
         if self._noSelectionSlot:
@@ -536,7 +603,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 ymin = bndbox[1]
                 xmax = bndbox[2]
                 ymax = bndbox[3]
-                templateImg = templateImg[ymin:ymax, xmin:xmax].clone()
+                templateImg = templateImg[ymin:ymax, xmin:xmax].copy()
             else:
                 shapeObj = dict(points = pts, center = shape.center, direction = shape.direction)
                 robndbox = LabelFile.convertPoints2RotatedBndBox(shapeObj)
@@ -550,13 +617,39 @@ class MainWindow(QMainWindow, WindowMixin):
                 dst = cv2.warpAffine(templateImg, M, (cols,rows))
                 templateImg = dst[int(cy - h/2) : int(cy + h/2), int(cx - w/2) : int(cx + w/2)].copy()
                 self.statusBar().showMessage(str(angle))
-            cv2.imshow("template", templateImg)
-            cv2.waitKey(0)
+
+            numLevels = int(self.numLevelsEdit.text())
+            angleStart = int(self.angleStartEdit.text())
+            angleExtent = int(self.angleExtentEdit.text())
+            angleStep = int(self.angleStepEdit.text())
+            granularity = int(self.granularityEdit.text())
+            contrast = int(self.contrastEdit.text())
+            minContrast = int(self.minContrastEdit.text())
+            self.model = pv.createTemplateRot(templateImg, numLevels,
+                angleStart, angleExtent, angleStep,
+                granularity, contrast, minContrast)
+            self.statusBar().showMessage('make success')
         self.statusBar().show()
     def matchTemplate(self):
         self.statusBar().showMessage('match template')
         searchImg = cv2.imread(self.filePath, 0)
-        # self.canvas.
+        if searchImg is None:
+            self.statusBar().showMessage('can\'t read image')
+            self.statusBar().show()
+            return
+        angleStart = int(self.angleStartEdit.text())
+        angleExtent = int(self.angleExtentEdit.text())
+        searchNum = int(self.searchNumEdit.text())
+        minScore = float(self.minScoreEdit.text())
+        greediness = float(self.greedinessEdit.text())
+        res = pv.bestMatchRotMg(searchImg,
+            self.model, angleStart, angleExtent,
+            searchNum, minScore, greediness)
+        self.matchViewModel.clear()
+        for y in range(res.shape[0]):
+            for x in range(res.shape[1]):
+                item = QStandardItem(str(res[y][x]))
+                self.matchViewModel.setItem(y, x, item)
         self.statusBar().show()
     def noShapes(self):
         return not self.ItemShapeDict
