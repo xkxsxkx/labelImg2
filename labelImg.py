@@ -210,10 +210,13 @@ class MainWindow(QMainWindow, WindowMixin):
         prevButton.clicked.connect(self.prevTemplate)
         makeButton.clicked.connect(self.makeTemplate)
         matchButton.clicked.connect(self.matchTemplate)
+        self.paintResultBox = QCheckBox(self)
+        self.paintResultBox.setText(u'show result')
         operaButtons = QHBoxLayout()
         operaButtons.addWidget(prevButton)
         operaButtons.addWidget(makeButton)
         operaButtons.addWidget(matchButton)
+        operaButtons.addWidget(self.paintResultBox)
         flo.addRow(operaButtons)
 
         matchLayer = QHBoxLayout()
@@ -581,6 +584,7 @@ class MainWindow(QMainWindow, WindowMixin):
             contrast = int(self.contrastEdit.text())
             minContrast = int(self.minContrastEdit.text())
             prev = pv.previewTemplate(templateImg, granularity, contrast, minContrast)
+            cv2.namedWindow("prev", cv2.WINDOW_AUTOSIZE)
             cv2.imshow("prev", prev)
             self.statusBar().showMessage('prev success')
             cv2.waitKey(0)
@@ -646,6 +650,11 @@ class MainWindow(QMainWindow, WindowMixin):
             self.model, angleStart, angleExtent,
             searchNum, minScore, greediness)
         self.matchViewModel.clear()
+        if self.paintResultBox.isChecked():
+            paint = pv.drawResult(searchImg, self.model, res)
+            cv2.namedWindow("result", cv2.WINDOW_AUTOSIZE)
+            cv2.imshow("result",paint)
+            cv2.waitKey(0)
         for y in range(res.shape[0]):
             for x in range(res.shape[1]):
                 item = QStandardItem(str(res[y][x]))
