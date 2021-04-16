@@ -8,6 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import hashlib
 import logging
+import json
+from paddleocr import PaddleOCR, draw_ocr
 
 
 class modelServer :
@@ -15,6 +17,8 @@ class modelServer :
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.task_list = {}
         self.threads = []
+        self.ocr = PaddleOCR(use_angle_cls = True, lang = "ch")
+        self.model = None
     def recvAll(self, sock, count):
         buf = b''#buf是一个byte类型
         while count:
@@ -28,20 +32,44 @@ class modelServer :
     def dealWithClient(self,newSocket,destAddr):
         while True:
             start = time.time()#用于计算帧率信息
-            method = newSocket.recv(1024).decode()
-            print(method)
-            length = self.recvAll(newSocket, 16)#获得图片文件的长度,16代表获取长度
+            # method = newSocket.recv(1024).decode()
+            received = newSocket.recv(1024).decode("utf-8")
+            dictInfo = json.loads(received)
+            print(dictInfo['method'])
+            method = dictInfo['method']
+            # length = self.recvAll(newSocket, 16)#获得图片文件的长度,16代表获取长度
+            length = dictInfo['imgLen']
             # recvData = newSocket.recv(1024)
             print('connect from:'+str(destAddr))
             if length != None:
-                stringData = self.recvAll(newSocket, int(length)) #根据获得的文件长度，获取图片文件
+                stringData = self.recvAll(newSocket, length) #根据获得的文件长度，获取图片文件
                 data = numpy.frombuffer(stringData, numpy.uint8) #将获取到的字符流数据转换成1维数组
-                decimg = cv2.imdecode(data,cv2.IMREAD_COLOR) #将数组解码成图像
-                cv2.imshow('SERVER', decimg)#显示图像
+                decImg = cv2.imdecode(data, cv2.IMREAD_COLOR) #将数组解码成图像
+                cv2.imshow('SERVER', decImg)#显示图像
                 k = cv2.waitKey(10)&0xff
                 if k == 27:
                     break
                 cv2.destroyAllWindows()
+                if (method == 'make'):
+                    self.model = pv.createTemplateRot(decImg, dictInfo['numLevels'],
+                        dictInfo['angleStart'], dictInfo['angleExtent'], dictInfo['angleStep'],
+                        dictInfo['granularity'], dictInfo['contrast'], dictInfo['minContrast'])
+                elif (method == 'match'):
+                    res = pv.bestMatchRotMg(decImg,
+                        self.model, dictInfo['angleStart'], dictInfo['angleExtent'],
+                        dictInfo['searchNum'], dictInfo['minScore'], dictInfo['greediness'])
+                elif (method == 'ocr'):
+                    result = self.ocr.ocr(decImg, cls=True)
+                    ocrdata = {}
+                    ocrdata["boxes"] = [line[0] for line in result]
+                    ocrdata["ocr"] = [line[1][0] for line in result]
+                    ocrdata["txts"] = [line[1][0] for line in result]
+                    ocrdata["scores"] = [line[1][1] for line in result]
+                    # ocrdata = json.dumps(result)
+                    # newSocket.sendall(bytes(ocrdata.encode('utf-8')))
+                    for line in result:
+                        print(line)
+
             else:
                 print('[%s]客户端已经关闭'%str(destAddr))
                 break
